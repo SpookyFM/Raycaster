@@ -39,7 +39,7 @@ void endFrame() {
 	texture->unlock();
 
 	Graphics::begin();
-	Graphics::clear(0);
+	Graphics::clear(Graphics::ClearColorFlag, 0xff000000);
 
 	program->set();
 	texture->set(tex);
@@ -85,8 +85,7 @@ void initGraphics() {
 		ii[i++] = 1; ii[i++] = 2; ii[i++] = 3;
 	}
 	ib->unlock();
-
-	texture = new Texture(width, height, Image::Format::RGBA32, false);
+	texture = new Texture(width, height, Image::RGBA32, false);
 	image = (int*)texture->lock();
 	for (int y = 0; y < texture->height; ++y) {
 		for (int x = 0; x < texture->width; ++x) {
