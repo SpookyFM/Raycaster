@@ -24,15 +24,56 @@ void startFrame() {
 	image = (int*)texture->lock();
 }
 
+#define CONVERT_COLORS(red, green, blue) int r = (int)((red) * 255); int g = (int)((green) * 255); int b = (int)((blue) * 255);
+
+void clear(float red, float green, float blue) {
+	CONVERT_COLORS(red, green, blue);
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+#ifdef OPENGL
+			image[y * texture->width + x] = 0xff << 24 | b << 16 | g << 8 | r;
+#else
+			image[y * texture->width + x] = 0xff << 24 | r << 16 | g << 8 | b;
+#endif
+		}
+	}
+}
+
 void setPixel(int x, int y, float red, float green, float blue) {
-	int r = (int)(red * 255);
-	int g = (int)(green * 255);
-	int b = (int)(blue * 255);
+	CONVERT_COLORS(red, green, blue);
 #ifdef OPENGL
 	image[y * texture->width + x] = 0xff << 24 | b << 16 | g << 8 | r;
 #else
 	image[y * texture->width + x] = 0xff << 24 | r << 16 | g << 8 | b;
 #endif
+}
+
+Image* loadImage(const char* filename) {
+	return new Texture(filename, true);
+}
+
+void destroyImage(Kore::Image* image) {
+	delete image;
+}
+
+void drawImage(Image* image, int x, int y) {
+	int ystart = max(0, -y);
+	int xstart = max(0, -x);
+	int h = min(image->height, height - y);
+	int w = min(image->width, width - x);
+	for (int yy = ystart; yy < h; ++yy) {
+		for (int xx = xstart; xx < w; ++xx) {
+			int col = image->at(xx, yy);
+#ifdef OPENGL
+			::image[(y + yy) * texture->width + (x + xx)] = col;
+#else
+			::image[(y + yy) * texture->width + (x + xx)] = 0xff << 24
+				| ((col >> 0) & 0xff) << 16
+				| ((col >> 8) & 0xff) << 8
+				| ((col >> 16) & 0xff);
+#endif
+		}
+	}
 }
 
 void endFrame() {
@@ -66,14 +107,25 @@ void initGraphics() {
 
 	tex = program->getTextureUnit("tex");
 
+	texture = new Texture(width, height, Image::RGBA32, false);
+	image = (int*)texture->lock();
+	for (int y = 0; y < texture->height; ++y) {
+		for (int x = 0; x < texture->width; ++x) {
+			image[y * texture->width + x] = 0;
+		}
+	}
+	texture->unlock();
+
 	vb = new VertexBuffer(4, structure);
 	float* v = vb->lock();
 	{
 		int i = 0;
+		float w = (float)texture->width / (float)texture->texWidth;
+		float h = (float)texture->height / (float)texture->texHeight;
 		v[i++] = -1; v[i++] = 1; v[i++] = 0.5; v[i++] = 0; v[i++] = 0;
-		v[i++] = 1;  v[i++] = 1; v[i++] = 0.5; v[i++] = 1; v[i++] = 0;
-		v[i++] = 1; v[i++] = -1;  v[i++] = 0.5; v[i++] = 1; v[i++] = 1;
-		v[i++] = -1; v[i++] = -1;  v[i++] = 0.5; v[i++] = 0; v[i++] = 1;
+		v[i++] = 1;  v[i++] = 1; v[i++] = 0.5; v[i++] = w; v[i++] = 0;
+		v[i++] = 1; v[i++] = -1;  v[i++] = 0.5; v[i++] = w; v[i++] = h;
+		v[i++] = -1; v[i++] = -1;  v[i++] = 0.5; v[i++] = 0; v[i++] = h;
 	}
 	vb->unlock();
 
@@ -85,12 +137,4 @@ void initGraphics() {
 		ii[i++] = 1; ii[i++] = 2; ii[i++] = 3;
 	}
 	ib->unlock();
-	texture = new Texture(width, height, Image::RGBA32, false);
-	image = (int*)texture->lock();
-	for (int y = 0; y < texture->height; ++y) {
-		for (int x = 0; x < texture->width; ++x) {
-			image[y * texture->width + x] = 0;
-		}
-	}
-	texture->unlock();
 }
