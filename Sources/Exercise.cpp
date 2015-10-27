@@ -28,7 +28,7 @@ namespace {
 }
 
 int kore(int argc, char** argv) {
-	Application* app = new Application(argc, argv, width, height, false, "Exercise2");
+	Application* app = new Application(argc, argv, width, height, 0, false, "Exercise2", true);
 	
 	initGraphics();
 	app->setCallback(update);

@@ -12,5 +12,6 @@ void setPixel(int x, int y, float red, float green, float blue);
 Kore::Image* loadImage(const char* filename);
 void destroyImage(Kore::Image* image);
 void drawImage(Kore::Image* image, int x, int y);
-const int width = 1024;
-const int height = 768;
+// Watch out for resolutions that are higher than your monitor's resolution and for non-power-of-two sizes
+const int width = 512;
+const int height = 512;
