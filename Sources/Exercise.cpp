@@ -11,7 +11,7 @@ using namespace Kore;
 
 namespace {
 	double startTime;
-	Image* image;
+	Texture* image;
 
 	void update() {
 		float t = (float)(System::time() - startTime);
@@ -19,9 +19,12 @@ namespace {
 		
 		startFrame();
 
-		// Replace this
-		//clear(0, 0, 0);
-		drawImage(image, (int)(sin(t) * 400), (int)(abs(sin(t * 1.5f)) * 470));
+		/************************************************************************/
+		/* Exercise 2, Practical Task:   
+		/* Add some interesting animations or effects here          
+		/************************************************************************/
+		// clear(0, 0, 0);
+		drawTexture(image, (int)(sin(t) * 400), (int)(abs(sin(t * 1.5f)) * 470));
 
 		endFrame();
 	}
@@ -34,14 +37,14 @@ int kore(int argc, char** argv) {
 	app->setCallback(update);
 
 	startTime = System::time();
-	image = loadImage("irobert-fb.png");
+	image = loadTexture("irobert-fb.png");
 	Kore::Mixer::init();
 	Kore::Audio::init();
 	Kore::Mixer::play(new SoundStream("back.ogg", true));
 
 	app->start();
 
-	destroyImage(image);
+	destroyTexture(image);
 	delete app;
 	
 	return 0;

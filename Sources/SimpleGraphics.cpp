@@ -39,28 +39,36 @@ void setPixel(int x, int y, float red, float green, float blue) {
 	int r = (int)(red * 255);
 	int g = (int)(green * 255);
 	int b = (int)(blue * 255);
+	if (y < 0 || y >= texture->texHeight || x < 0 || x >= texture->texWidth) {
+		return;
+	}
 	image[y * texture->texWidth + x] = 0xff << 24 | r << 16 | g << 8 | b;
 }
 
-Image* loadImage(const char* filename) {
+Texture* loadTexture(const char* filename) {
 	return new Texture(filename, true);
 }
 
-void destroyImage(Kore::Image* image) {
+void destroyTexture(Kore::Texture* image) {
 	delete image;
 }
 
-void drawImage(Image* image, int x, int y) {
+void drawTexture(Texture* inImage, int x, int y) {
 	int ystart = max(0, -y);
 	int xstart = max(0, -x);
-	int h = min(image->height, height - y);
-	int w = min(image->width, width - x);
+	int h = min(inImage->height, height - y);
+	int w = min(inImage->width, width - x);
 	for (int yy = ystart; yy < h; ++yy) {
 		for (int xx = xstart; xx < w; ++xx) {
-			int col = image->at(xx, yy);
-				::image[(y + yy) * texture->width + (x + xx)] = col;
+			int col = readPixel(inImage, xx, yy);
+			 ::image[(y + yy) * texture->texWidth + (x + xx)] = col;
 		}
 	}
+}
+
+int readPixel(Kore::Texture* image, int x, int y)
+{
+	return *(int*)&((u8*)image->data)[image->texWidth * 4 * y + x * 4];
 }
 
 void endFrame() {
