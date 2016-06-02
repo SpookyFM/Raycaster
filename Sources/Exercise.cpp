@@ -1,6 +1,5 @@
 #include "pch.h"
 
-#include <Kore/Application.h>
 #include <Kore/IO/FileReader.h>
 #include <Kore/Math/Core.h>
 #include <Kore/System.h>
@@ -31,21 +30,38 @@ namespace {
 }
 
 int kore(int argc, char** argv) {
-	Application* app = new Application(argc, argv, width, height, 0, false, "Exercise2", true);
-	
-	initGraphics();
-	app->setCallback(update);
 
+	Kore::System::setName("TUD Game Technology - ");
+	Kore::System::setup();
+	Kore::WindowOptions options;
+	options.title = "Exercise 2";
+	options.width = width;
+	options.height = height;
+	options.x = 100;
+	options.y = 100;
+	options.targetDisplay = -1;
+	options.mode = WindowModeWindow;
+	options.rendererOptions.depthBufferBits = 16;
+	options.rendererOptions.stencilBufferBits = 8;
+	options.rendererOptions.textureFormat = 0;
+	options.rendererOptions.antialiasing = 0;
+	Kore::System::initWindow(options);
+
+	initGraphics();
+	Kore::System::setCallback(update);
+
+
+	
 	startTime = System::time();
+	
 	image = loadTexture("irobert-fb.png");
 	Kore::Mixer::init();
 	Kore::Audio::init();
 	Kore::Mixer::play(new SoundStream("back.ogg", true));
 
-	app->start();
+	Kore::System::start();
 
 	destroyTexture(image);
-	delete app;
 	
 	return 0;
 }
