@@ -22,7 +22,7 @@ namespace {
 		/* Exercise 2, Practical Task:   
 		/* Add some interesting animations or effects here          
 		/************************************************************************/
-		// clear(0, 0, 0);
+		clear(0.0f, 0, 0);
 		drawTexture(image, (int)(sin(t) * 400), (int)(abs(sin(t * 1.5f)) * 470));
 
 		endFrame();

@@ -8,7 +8,7 @@ void initGraphics();
 void startFrame();
 void endFrame();
 void clear(float red, float green, float blue);
-void setPixel(int x, int y, float red, float green, float blue);
+void setPixel(int x, int y, float red, float green, float blue, float alpha = 0.0f);
 Kore::Texture* loadTexture(const char* filename);
 void destroyTexture(Kore::Texture* image);
 void drawTexture(Kore::Texture* image, int x, int y);

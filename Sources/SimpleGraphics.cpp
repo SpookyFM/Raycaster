@@ -26,7 +26,11 @@ void startFrame() {
 	image = (int*)texture->lock();
 }
 
-#define CONVERT_COLORS(red, green, blue) int r = (int)((red) * 255); int g = (int)((green) * 255); int b = (int)((blue) * 255);
+#if DIRECT3D
+#define CONVERT_COLORS(red, green, blue) int r = (int)(blue * 255); int g = (int)(green * 255); int b = (int)(red * 255);
+#else
+#define CONVERT_COLORS(red, green, blue) int r = (int)(red * 255); int g = (int)(green * 255); int b = (int)(blue * 255);
+#endif
 
 void clear(float red, float green, float blue) {
 	CONVERT_COLORS(red, green, blue);
@@ -37,14 +41,30 @@ void clear(float red, float green, float blue) {
 	}
 }
 
-void setPixel(int x, int y, float red, float green, float blue) {
-	int r = (int)(red * 255);
-	int g = (int)(green * 255);
-	int b = (int)(blue * 255);
+
+void setPixel(int x, int y, float red, float green, float blue, float alpha /* = 1.0f */) {
 	if (y < 0 || y >= texture->texHeight || x < 0 || x >= texture->texWidth) {
 		return;
 	}
+	
+	int col = image[y * texture->texWidth + x];
+	float ri = ((col >> 16) & 0xff) / 255.0f;
+	float gi = ((col >> 8)  & 0xff) / 255.0f;
+	float bi = (col & 0xff) / 255.0f;
+	
+	float ar = alpha * red + (1.0f - alpha) * ri;
+	float ag = alpha * green + (1.0f - alpha) * gi;
+	float ab = alpha * blue + (1.0f - alpha) * bi;
+
+	int r = (int)(ar * 255);
+	int g = (int)(ag * 255);
+	int b = (int)(ab * 255);
+
+#if DIRECT3D	
+	image[y * texture->texWidth + x] = 0xff << 24 | b << 16 | g << 8 | r;
+#else
 	image[y * texture->texWidth + x] = 0xff << 24 | r << 16 | g << 8 | b;
+#endif
 }
 
 Texture* loadTexture(const char* filename) {
@@ -63,14 +83,25 @@ void drawTexture(Texture* inImage, int x, int y) {
 	for (int yy = ystart; yy < h; ++yy) {
 		for (int xx = xstart; xx < w; ++xx) {
 			int col = readPixel(inImage, xx, yy);
-			 ::image[(y + yy) * texture->texWidth + (x + xx)] = col;
+
+			float a = ((col >> 24) & 0xff) / 255.0f;
+			float r = ((col >> 16) & 0xff) / 255.0f;
+			float g = ((col >> 8)  & 0xff) / 255.0f;
+			float b = (col & 0xff) / 255.0f;
+			setPixel(x + xx, y + yy, r, g, b, a);
 		}
 	}
 }
 
 int readPixel(Kore::Texture* image, int x, int y)
 {
-	return *(int*)&((u8*)image->data)[image->texWidth * 4 * y + x * 4];
+	int c = *(int*)&((u8*)image->data)[image->texWidth * 4 * y + x * 4];
+	int a = (c >> 24) & 0xff;
+	int r = (c >> 16) & 0xff;
+	int g = (c >> 8) & 0xff;
+	int b = c & 0xff;
+
+	return a << 24 | r << 16 | g << 8 | b;
 }
 
 void endFrame() {
