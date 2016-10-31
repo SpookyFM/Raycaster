@@ -26,7 +26,7 @@ void startFrame() {
 	image = (int*)texture->lock();
 }
 
-#if DIRECT3D
+#ifdef DIRECT3D
 #define CONVERT_COLORS(red, green, blue) int r = (int)(blue * 255); int g = (int)(green * 255); int b = (int)(red * 255);
 #else
 #define CONVERT_COLORS(red, green, blue) int r = (int)(red * 255); int g = (int)(green * 255); int b = (int)(blue * 255);
@@ -48,10 +48,17 @@ void setPixel(int x, int y, float red, float green, float blue, float alpha /* =
 	}
 	
 	int col = image[y * texture->texWidth + x];
+
+#ifdef DIRECT3D
+	float bi = ((col >> 16) & 0xff) / 255.0f;
+	float gi = ((col >> 8)  & 0xff) / 255.0f;
+	float ri = (col & 0xff) / 255.0f;
+#else
 	float ri = ((col >> 16) & 0xff) / 255.0f;
 	float gi = ((col >> 8)  & 0xff) / 255.0f;
 	float bi = (col & 0xff) / 255.0f;
-	
+#endif
+
 	float ar = alpha * red + (1.0f - alpha) * ri;
 	float ag = alpha * green + (1.0f - alpha) * gi;
 	float ab = alpha * blue + (1.0f - alpha) * bi;
@@ -60,7 +67,7 @@ void setPixel(int x, int y, float red, float green, float blue, float alpha /* =
 	int g = (int)(ag * 255);
 	int b = (int)(ab * 255);
 
-#if DIRECT3D	
+#ifdef DIRECT3D	
 	image[y * texture->texWidth + x] = 0xff << 24 | b << 16 | g << 8 | r;
 #else
 	image[y * texture->texWidth + x] = 0xff << 24 | r << 16 | g << 8 | b;
@@ -97,9 +104,15 @@ int readPixel(Kore::Texture* image, int x, int y)
 {
 	int c = *(int*)&((u8*)image->data)[image->texWidth * 4 * y + x * 4];
 	int a = (c >> 24) & 0xff;
+#ifdef DIRECT3D
 	int r = (c >> 16) & 0xff;
 	int g = (c >> 8) & 0xff;
 	int b = c & 0xff;
+#else
+	int b = (c >> 16) & 0xff;
+	int g = (c >> 8) & 0xff;
+	int r = c & 0xff;
+#endif
 
 	return a << 24 | r << 16 | g << 8 | b;
 }
