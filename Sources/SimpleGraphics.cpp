@@ -49,7 +49,7 @@ void setPixel(int x, int y, float red, float green, float blue, float alpha /* =
 	
 	int col = image[y * texture->texWidth + x];
 
-#ifdef DIRECT3D
+#ifdef OPENGL
 	float bi = ((col >> 16) & 0xff) / 255.0f;
 	float gi = ((col >> 8)  & 0xff) / 255.0f;
 	float ri = (col & 0xff) / 255.0f;
@@ -67,7 +67,7 @@ void setPixel(int x, int y, float red, float green, float blue, float alpha /* =
 	int g = (int)(ag * 255);
 	int b = (int)(ab * 255);
 
-#ifdef DIRECT3D	
+#ifdef OPENGL
 	image[y * texture->texWidth + x] = 0xff << 24 | b << 16 | g << 8 | r;
 #else
 	image[y * texture->texWidth + x] = 0xff << 24 | r << 16 | g << 8 | b;
@@ -100,28 +100,20 @@ void drawTexture(Texture* inImage, int x, int y) {
 	}
 }
 
-int readPixel(Kore::Texture* image, int x, int y)
-{
+int readPixel(Kore::Texture* image, int x, int y) {
 	int c = *(int*)&((u8*)image->data)[image->texWidth * 4 * y + x * 4];
 	int a = (c >> 24) & 0xff;
-#ifdef DIRECT3D
-	int r = (c >> 16) & 0xff;
-	int g = (c >> 8) & 0xff;
-	int b = c & 0xff;
-#else
+
 	int b = (c >> 16) & 0xff;
 	int g = (c >> 8) & 0xff;
 	int r = c & 0xff;
-#endif
 
 	return a << 24 | r << 16 | g << 8 | b;
 }
 
 void endFrame() {
 	texture->unlock();
-
-
-
+	
 	program->set();
 	Graphics::setTexture(tex, texture);
 	Graphics::setVertexBuffer(*vb);
