@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cmath>
 #include "Kore/Graphics/Texture.h"
+#include <cassert>
 
 using namespace Kore;
 
@@ -34,10 +35,10 @@ bool KeyRightDown;
 bool KeyUpDown;
 bool KeyDownDown;
 
-const float TurningSpeed = 0.1f;
-const float WalkingSpeed = 50.0f;
+const float TurningSpeed = 2.0f;
+const float WalkingSpeed = 100.0f;
 
-const float DistanceFactor = 80 * 500.0f;
+const float DistanceFactor = 25.0f * 512.0f;
 
 
 Kore::Texture* wallTexture; 
@@ -108,8 +109,8 @@ namespace {
 	Kore::vec2 GetForwardVector(float Angle)
 	{
 		return Kore::vec2(
-			Kore::sin(Angle),
-			Kore::cos(Angle)
+			Kore::cos(Angle),
+			-Kore::sin(Angle)
 		);
 	}
 
@@ -151,8 +152,11 @@ namespace {
 		float d = Kore::abs(fmodResult / (Kore::pi * 0.5f));
 
 		float WrappedAngle = Angle;
-		float TanAngle = Kore::tan(WrappedAngle);
-		if (d < 0.1f || Kore::abs(1.0f - d) < 0.1f)
+		float SinAngle = Kore::sin(WrappedAngle);
+		float CosAngle = Kore::cos(WrappedAngle);
+		float TanAngle = SinAngle / CosAngle;
+		const float epsilon = 0.01f;
+		if (d < epsilon || Kore::abs(1.0f - d) < epsilon)
 		{
 			// Worry about those later
 			return CellSize * (LevelHeight * LevelWidth);
@@ -194,14 +198,17 @@ namespace {
 		{
 			HorizontalColor = CurrentColorHorizontal;
 			HorizontalDistance = FirstDeltaX;
+			Kore::log(Info, "Horizontal: Hit test on first attempt.");
 		}
 		else
 		{
 			// We need to iterate from this point
 			unsigned int NumHorizontalChecks = SignHorizontal > 0 ? LevelWidth - CurrentCell.x() : CurrentCell.x();
 			// Inverted due to inverted y-axis
-			float DeltaY = -TanAngle * CellSize;
+			float DeltaY = -TanAngle * CellSize * SignVertical;
 			float CurrentY = Position.y() + FirstDeltaY;
+			// If we walk to the left, we are checking for the right side of the cell
+			//TestCell[0] += SignHorizontal < 0 ? -1 : 0;
 			for (unsigned int i = 0; i < NumHorizontalChecks; i++)
 			{
 				TestCell[0] += SignHorizontal;
@@ -220,6 +227,8 @@ namespace {
 					HorizontalColor = CurrentColorHorizontal;
 					HitHorizontalCell = TestCell;
 					Kore::vec2 HitPoint(TestCell[0] * CellSize, CurrentY);
+					float TestHorizontalDistance = HitPoint[0] - CurrentPosition[0];
+					// assert(Kore::abs(TestHorizontalDistance - HorizontalDistance) < 0.5f);
 					if (Debug) Kore::log(Info, "Horizontal: Hit at point: %.2f|%.2f, distance %.2f", HitPoint.x(), HitPoint.y(), (HitPoint - CurrentPosition).getLength());
 					break;
 				}
@@ -246,14 +255,17 @@ namespace {
 		{
 			VerticalColor = CurrentColorVertical;
 			VerticalDistance = FirstDeltaY;
+			Kore::log(Info, "Vertical: Hit test on first attempt.");
 		}
 		else
 		{
 			// We need to iterate from this point
 			// If we are moving up (SignVertical = -1) we are hitting the lower bounds of the cell, if we are moving down (SignVertical = 1) we are hitting the top of the cell
 			unsigned int NumVerticalChecks = SignVertical > 0 ? LevelHeight - CurrentCell.y() : CurrentCell.y();
-			float DeltaX = -CellSize / TanAngle;
+			float DeltaX = -CellSize / TanAngle * SignHorizontal;
 			float CurrentX = Position.x() + FirstDeltaX;
+			// Adjust for the direction
+			// TestCell[1] += SignVertical > 0 ? 0 : 1;
 			for (unsigned int i = 0; i < NumVerticalChecks; i++)
 			{
 				TestCell[1] += SignVertical;
@@ -283,21 +295,25 @@ namespace {
 		if (IsSolid(HorizontalColor))
 		{
 			float Y = -TanAngle * HorizontalDistance;
-			Distance = Kore::sqrt(HorizontalDistance * HorizontalDistance + Y * Y);
+			// Distance = Kore::sqrt(HorizontalDistance * HorizontalDistance + Y * Y);
+			Distance = Kore::cos(CurrentAngle) * HorizontalDistance - Kore::sin(CurrentAngle) * Y;
 			Result = HorizontalColor;
 			HitCell = HitHorizontalCell;
 			float yHitPosition = fmod(CurrentPosition.y() + Y, 100.0f) / 100.0f;
 			TexCoordX = (int)(yHitPosition * 64.0f);
-		}
+		} 
 		if (IsSolid(VerticalColor))
 		{
-			float X = VerticalDistance / TanAngle;
-			float TestDistance = Kore::sqrt(VerticalDistance * VerticalDistance + X * X);
+			float X = -VerticalDistance / TanAngle;
+			//float TestDistance = Kore::sqrt(VerticalDistance * VerticalDistance + X * X);
+			float TestDistance = Kore::cos(CurrentAngle) * X - Kore::sin(CurrentAngle) * VerticalDistance;
 			if (TestDistance < Distance)
 			{
 				Distance = TestDistance;
 				Result = VerticalColor;
 				HitCell = HitVerticalCell;
+				float xHitPosition = fmod(CurrentPosition.x() + X, 100.0f) / 100.0f;
+				TexCoordX = (int)(xHitPosition * 64.0f);
 			}
 		}
 		return Distance;
@@ -334,15 +350,16 @@ namespace {
 		// Handle inputs
 		if (KeyLeftDown)
 		{
-			CurrentAngle -= TurningSpeed * DeltaT;
+			CurrentAngle += TurningSpeed * DeltaT;
 		}
 		if (KeyRightDown)
 		{
-			CurrentAngle += TurningSpeed * DeltaT;
+			CurrentAngle -= TurningSpeed * DeltaT;
 		}
 		if (KeyUpDown)
 		{
 			Kore::vec2 Forward = GetForwardVector(CurrentAngle);
+			Kore::log(Info, "Forward Vector: %.2f|%.2f", Forward.x(), Forward.y());
 			CurrentPosition += Forward * WalkingSpeed * DeltaT;
 		}
 		if (KeyDownDown)
@@ -353,8 +370,8 @@ namespace {
 
 		// Draw graphics
 		float HalfFOV = Kore::pi * 0.25f;
-		float StartAngle = CurrentAngle - HalfFOV;
-		float DeltaAngle = HalfFOV * 2.0f / (float)width;
+		float StartAngle = CurrentAngle + HalfFOV;
+		float DeltaAngle = -HalfFOV * 2.0f / (float)width;
 		float CurrentRayAngle = StartAngle;
 		Kore::vec3 CurrentColor;
 		Kore::vec2i HitCell;
@@ -362,6 +379,7 @@ namespace {
 		for (int X = 0; X < width; X++)
 		{
 			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentColor, HitCell, TexCoordX);
+			// float LineHeight = DistanceFactor / Distance;
 			float LineHeight = DistanceFactor / Distance;
 			// DrawVerticalLine(CurrentColor, X, LineHeight);
 			DrawVerticalLine(wallTexture, X, TexCoordX, (int) LineHeight);
@@ -374,7 +392,7 @@ namespace {
 		Kore::vec2i Cell = GetCell(CurrentPosition);
 		// Kore::log(Info, "DeltaT: %f", DeltaT);
 		Kore::log(Info, "Player is at %.1f|%.1f, angle %.3f, cell %i|%i, hit cell %i|%i distance is %.2f", CurrentPosition.x(), CurrentPosition.y(), RadToDegrees(CurrentAngle), Cell.x(), Cell.y(), HitCell.x(), HitCell.y(), TestDistance);
-		Kore::log(Info, "Tex Coord X: %f", TexCoordX);
+		// Kore::log(Info, "Tex Coord X: %f", TexCoordX);
 		// And draw a red line in the center
 		DrawVerticalLine(Kore::vec3(1.0f, 0.0f, 0.0f), width / 2, height);
 		//DrawVerticalLine(wallTexture, width / 2, 32, height);
