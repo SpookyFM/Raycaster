@@ -198,7 +198,8 @@ namespace {
 		{
 			HorizontalColor = CurrentColorHorizontal;
 			HorizontalDistance = FirstDeltaX;
-			Kore::log(Info, "Horizontal: Hit test on first attempt.");
+			HitHorizontalCell = TestCell;
+			if (Debug) Kore::log(Info, "Horizontal: Hit test on first attempt.");
 		}
 		else
 		{
@@ -224,6 +225,7 @@ namespace {
 				if (IsSolid(CurrentColorHorizontal))
 				{
 					HorizontalDistance = FirstDeltaX + CellSize * (i + 1) * SignHorizontal;
+					// HorizontalDistance += SignHorizontal < 0 ? CellSize: 0.0f;
 					HorizontalColor = CurrentColorHorizontal;
 					HitHorizontalCell = TestCell;
 					Kore::vec2 HitPoint(TestCell[0] * CellSize, CurrentY);
@@ -255,7 +257,8 @@ namespace {
 		{
 			VerticalColor = CurrentColorVertical;
 			VerticalDistance = FirstDeltaY;
-			Kore::log(Info, "Vertical: Hit test on first attempt.");
+			HitVerticalCell = TestCell;
+			if (Debug) Kore::log(Info, "Vertical: Hit test on first attempt.");
 		}
 		else
 		{
@@ -282,6 +285,7 @@ namespace {
 				{
 					//VerticalDistance = FirstDeltaY + CellSize * (i + 1) * SignVertical;
 					VerticalDistance = FirstDeltaY + CellSize * (i + 1) * SignVertical;
+					VerticalDistance += SignVertical > 0 ? 0.0f : -100.0f;
 					VerticalColor = CurrentColorVertical;
 					HitVerticalCell = TestCell;
 					Kore::vec2 HitPoint(CurrentX, TestCell[1] * CellSize);
@@ -301,7 +305,7 @@ namespace {
 			HitCell = HitHorizontalCell;
 			float yHitPosition = fmod(CurrentPosition.y() + Y, 100.0f) / 100.0f;
 			TexCoordX = (int)(yHitPosition * 64.0f);
-		} 
+		}
 		if (IsSolid(VerticalColor))
 		{
 			float X = -VerticalDistance / TanAngle;
