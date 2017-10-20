@@ -22,11 +22,20 @@ static constexpr unsigned int LevelHeight = 10;
 const float CellSize = 100.0f;
 const float TextureSize = 64.0f;
 
-Kore::vec3 Level[LevelWidth][LevelHeight];
+int Level[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+				1, 0, 0, 1, 1, 1, 0, 0, 0, 1,
+				1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
+				1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
+				1, 0, 0, 1, 1, 1, 0, 0, 0, 1,
+				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
 
 Kore::vec2 CurrentPosition = Kore::vec2(
-	LevelWidth * CellSize * 0.5f,
-	LevelHeight * CellSize * 0.5f
+	LevelWidth * CellSize * 0.2f,
+	LevelHeight * CellSize * 0.2f
 );
 
 float CurrentAngle;
@@ -41,15 +50,16 @@ const float WalkingSpeed = 100.0f;
 
 const float DistanceFactor = 25.0f * 512.0f;
 
-
-Kore::Texture* wallTexture; 
+constexpr int NumTextures = 1;
+Kore::Texture** Textures;
+Kore::vec3* Colors;
 
 namespace {
 	double startTime;
 	Texture* image;
 
 	/** Initializes the map with colors and empty cells */
-	void SetupMap()
+	/* void SetupMap()
 	{
 		std::memset(&Level, 0, sizeof(Kore::vec3)*LevelWidth*LevelHeight);
 		const Kore::vec3 colorNorth = Kore::vec3(1.0f, 0.0f, 0.0f);
@@ -85,7 +95,7 @@ namespace {
 				}
 			}
 		}
-	}
+	} */
 	
 	float RadToDegrees(float Angle)
 	{
@@ -123,9 +133,19 @@ namespace {
 		return result;
 	}
 
-	Kore::vec3 GetColor(Kore::vec2i Cell)
+	int GetIndex(const Kore::vec2i& Cell)
 	{
-		return Level[Cell.x()][Cell.y()];
+		return Level[Cell.y() * LevelWidth + Cell.x()];
+	}
+
+	Kore::vec3 GetColor(const Kore::vec2i& Cell)
+	{
+		return Colors[GetIndex(Cell)];
+	}
+
+	Kore::Texture* GetTexture(const Kore::vec2i& Cell)
+	{
+		return Textures[GetIndex(Cell)];
 	}
 
 	Kore::vec2 GetPositionInCurrentCell(Kore::vec2 Position)
@@ -133,6 +153,11 @@ namespace {
 		Kore::vec2i CurrentCell = GetCell(Position);
 		Kore::vec2 CurrentOrigin = Kore::vec2((float)CurrentCell.x(), (float)CurrentCell.y()) * CellSize;
 		return Position - CurrentOrigin;
+	}
+
+	bool IsSolid(int Index)
+	{
+		return Index > 0;
 	}
 
 	bool IsSolid(const Kore::vec3& Color)
@@ -159,8 +184,9 @@ namespace {
 	// Increasing x to the right
 	// Increasing y to the bottom
 	// Note: This means that we have to account for the vertical direction of the unit circle being the other way around than the coordinate system
-	float CastRay(Kore::vec2 Position, float Angle, Kore::vec3& Result, Kore::vec2i& HitCell, int& TexCoordX, bool Debug = false)
+	float CastRay(Kore::vec2 Position, float Angle, int& Result, Kore::vec2i& HitCell, int& TexCoordX, bool Debug = false)
 	{
+		Result = -1;
 		if (Debug) Kore::log(Info, "Position %.2f%.2f, Angle %.2f", Position.x(), Position.y(), RadToDegrees(Angle));
 		// Check for edge cases at multiples of 90 degrees
 		float fmodResult = fmod(Angle, (Kore::pi * 0.5f));
@@ -181,11 +207,11 @@ namespace {
 		if (Debug) Kore::log(Info, "Tan: %f, SignHorizontal %i, SignVertical %i", TanAngle, SignHorizontal, SignVertical);
 
 		// These values will indicate if we had a horizontal or vertical hit or both (in this case, the shorter distance is taken)
-		Kore::vec3 HorizontalColor;
+		int HorizontalIndex = -1;
 		float HorizontalDistance = -1.0f;
 		Kore::vec2i HitHorizontalCell;
 
-		Kore::vec3 VerticalColor;
+		int VerticalIndex = -1;
 		float VerticalDistance = -1.0f;
 		Kore::vec2i HitVerticalCell;
 
@@ -210,10 +236,10 @@ namespace {
 			(int)Kore::floor((Position.y() + FirstDeltaY) / CellSize)
 		);
 
-		Kore::vec3 CurrentColorHorizontal = GetColor(TestCell);
-		if (IsSolid(CurrentColorHorizontal))
+		int CurrentIndexHorizontal = GetIndex(TestCell);
+		if (IsSolid(CurrentIndexHorizontal))
 		{
-			HorizontalColor = CurrentColorHorizontal;
+			HorizontalIndex = CurrentIndexHorizontal;
 			HorizontalDistance = FirstDeltaX;
 			HitHorizontalCell = TestCell;
 			if (Debug) Kore::log(Info, "Horizontal: Hit result in initial test.");
@@ -242,13 +268,13 @@ namespace {
 					break;
 				}
 
-				CurrentColorHorizontal = GetColor(TestCell);
-				if (IsSolid(CurrentColorHorizontal))
+				CurrentIndexHorizontal = GetIndex(TestCell);
+				if (IsSolid(CurrentIndexHorizontal))
 				{
 					// We have hit a cell from the left or the right
 					// Horizontally, we have moved the initial distance to the first cell border plus i additional cells
 					HorizontalDistance = FirstDeltaX + CellSize * i * SignHorizontal;
-					HorizontalColor = CurrentColorHorizontal;
+					HorizontalIndex = CurrentIndexHorizontal;
 					HitHorizontalCell = TestCell;
 					if (Debug) Kore::log(Info, "Horizontal: Hit at cell %i|%i", HitHorizontalCell.x(), HitHorizontalCell.y());
 					break;
@@ -273,10 +299,10 @@ namespace {
 			CurrentCell.y() + SignVertical
 		);
 
-		Kore::vec3 CurrentColorVertical = GetColor(TestCell);
-		if (IsSolid(CurrentColorVertical))
+		int CurrentIndexVertical = GetIndex(TestCell);
+		if (IsSolid(CurrentIndexVertical))
 		{
-			VerticalColor = CurrentColorVertical;
+			VerticalIndex = CurrentIndexVertical;
 			VerticalDistance = FirstDeltaY;
 			HitVerticalCell = TestCell;
 			if (Debug) Kore::log(Info, "Vertical: Hit result in initial test.");
@@ -305,13 +331,13 @@ namespace {
 					break;
 				}
 
-				CurrentColorVertical = GetColor(TestCell);
-				if (IsSolid(CurrentColorVertical))
+				int CurrentIndexVertical = GetIndex(TestCell);
+				if (IsSolid(CurrentIndexVertical))
 				{
 					// We have hit a cell from the top or the bottom 
 					// Vertically, we have moved the initial distance to the first cell border plus i additional cells
 					VerticalDistance = FirstDeltaY + CellSize * i * SignVertical;
-					VerticalColor = CurrentColorVertical;
+					VerticalIndex = CurrentIndexVertical;
 					HitVerticalCell = TestCell;
 					if (Debug) Kore::log(Info, "Vertical: Hit at cell %i|%i", HitVerticalCell.x(), HitVerticalCell.y());
 					break;
@@ -323,19 +349,19 @@ namespace {
 		// Now, check which distance is shorter
 		//////////////////////////////////////////////////////////////////////////
 		float Distance = CellSize * Kore::max(LevelWidth, LevelHeight) + 100000.0f;
-		if (IsSolid(HorizontalColor))
+		if (IsSolid(HorizontalIndex))
 		{
 			// For the vertical distance, we need to invert again
 			float Y = -TanAngle * HorizontalDistance;
 			AssertSign(HorizontalDistance, SignHorizontal);
 			AssertSign(Y, SignVertical);
 			Distance = Kore::cos(CurrentAngle) * HorizontalDistance - Kore::sin(CurrentAngle) * Y;
-			Result = HorizontalColor;
+			Result = HorizontalIndex;
 			HitCell = HitHorizontalCell;
 			float yHitPosition = fmod(CurrentPosition.y() + Y, CellSize) / CellSize;
 			TexCoordX = (int)(yHitPosition * TextureSize);
 		} 
-		if (IsSolid(VerticalColor))
+		if (IsSolid(VerticalIndex))
 		{
 			// For the vertical distance, we need to invert again
 			float X = -VerticalDistance / TanAngle;
@@ -345,7 +371,7 @@ namespace {
 			if (TempDistance < Distance)
 			{
 				Distance = TempDistance;
-				Result = VerticalColor;
+				Result = VerticalIndex;
 				HitCell = HitVerticalCell;
 				float xHitPosition = fmod(CurrentPosition.x() + X, CellSize) / CellSize;
 				TexCoordX = (int)(xHitPosition * TextureSize);
@@ -364,13 +390,13 @@ namespace {
 	}
 
 
-	void DrawVerticalLine(const Kore::Texture* InTexture, int X, int texX, int LineHeight)
+	void DrawVerticalLine(Kore::Texture* InTexture, int X, int texX, int LineHeight)
 	{
 		for (int y = 0; y < LineHeight; y++)
 		{
 			float fY = (float)y / (float)LineHeight;
-			int texY = (int)(fY * wallTexture->texHeight);
-			int col  = readPixel(wallTexture, texX, texY);
+			int texY = (int)(fY * TextureSize);
+			int col  = readPixel(InTexture, texX, texY);
 			float a = ((col >> 24) & 0xff) / 255.0f;
 			float r = ((col >> 16) & 0xff) / 255.0f;
 			float g = ((col >> 8)  & 0xff) / 255.0f;
@@ -408,22 +434,24 @@ namespace {
 		float StartAngle = CurrentAngle + HalfFOV;
 		float DeltaAngle = -HalfFOV * 2.0f / (float)width;
 		float CurrentRayAngle = StartAngle;
-		Kore::vec3 CurrentColor;
+		int CurrentIndex;
 		Kore::vec2i HitCell;
 		int TexCoordX = 0;
 		for (int X = 0; X < width; X++)
 		{
-			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentColor, HitCell, TexCoordX);
-			// float LineHeight = DistanceFactor / Distance;
+			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentIndex, HitCell, TexCoordX);
 			float LineHeight = DistanceFactor / Distance;
-			// DrawVerticalLine(CurrentColor, X, LineHeight);
-			DrawVerticalLine(wallTexture, X, TexCoordX, (int) LineHeight);
+			if (IsSolid(CurrentIndex))
+			{
+				Kore::Texture* CurrentTexture = Textures[CurrentIndex];
+				DrawVerticalLine(CurrentTexture, X, TexCoordX, (int)LineHeight);
+			}
 			CurrentRayAngle += DeltaAngle;
 		}
 
 		// For debugging, calculate the current forward Angle
 		// CurrentAngle = -0.2f;
-		float TestDistance = CastRay(CurrentPosition, CurrentAngle, CurrentColor, HitCell, TexCoordX, true);
+		float TestDistance = CastRay(CurrentPosition, CurrentAngle, CurrentIndex, HitCell, TexCoordX, true);
 		Kore::vec2i Cell = GetCell(CurrentPosition);
 		bool IsInsideBlock = IsSolid(GetColor(Cell));
 		assert(!IsInsideBlock);
@@ -511,7 +539,7 @@ int kore(int argc, char** argv) {
 	Keyboard::the()->KeyDown = keyDown;
 	Keyboard::the()->KeyUp = keyUp;
 
-	SetupMap();
+	// SetupMap();
 	Kore::System::setCallback(update);
 
 
@@ -519,7 +547,11 @@ int kore(int argc, char** argv) {
 	startTime = System::time();
 	
 	image = loadTexture("irobert-fb.png");
-	wallTexture = loadTexture("finalredbrick1.png");
+	Colors = new Kore::vec3[NumTextures + 1];
+	Colors[1] = Kore::vec3(1.0f, 0.0f, 0.0f);
+	Textures = new Kore::Texture*[NumTextures + 1];
+	Textures[0] = nullptr;
+	Textures[1] = loadTexture("finalredbrick1.png");
 	Kore::Mixer::init();
 	Kore::Audio::init();
 	Kore::Mixer::play(new SoundStream("back.ogg", true));
