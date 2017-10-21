@@ -22,20 +22,16 @@ static constexpr unsigned int LevelHeight = 10;
 const float CellSize = 100.0f;
 const float TextureSize = 64.0f;
 
-int Level[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-				1, 0, 0, 1, 1, 1, 0, 0, 0, 1,
-				1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
-				1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
-				1, 0, 0, 1, 1, 1, 0, 0, 0, 1,
-				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-				1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-				1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+int Level[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 33, 0, 0, 0, 1, 1, 0, 0, 0, 0, 33, 0, 0, 0, 1, 1, 0, 0, 0, 0, 33, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 33, 0, 0, 0, 1, 1, 0, 0, 0, 0, 33, 0, 0, 0, 1, 1, 0, 0, 0, 0, 33, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 Kore::vec2 CurrentPosition = Kore::vec2(
 	LevelWidth * CellSize * 0.2f,
 	LevelHeight * CellSize * 0.2f
+);
+
+Kore::vec2 LightSource = Kore::vec2(
+	4 * CellSize,
+	2 * CellSize
 );
 
 float CurrentAngle;
@@ -51,51 +47,11 @@ const float WalkingSpeed = 100.0f;
 const float DistanceFactor = 25.0f * 512.0f;
 
 constexpr int NumTextures = 1;
-Kore::Texture** Textures;
+Kore::Texture* Walls;
 Kore::vec3* Colors;
 
 namespace {
 	double startTime;
-	Texture* image;
-
-	/** Initializes the map with colors and empty cells */
-	/* void SetupMap()
-	{
-		std::memset(&Level, 0, sizeof(Kore::vec3)*LevelWidth*LevelHeight);
-		const Kore::vec3 colorNorth = Kore::vec3(1.0f, 0.0f, 0.0f);
-		const Kore::vec3 colorEast = Kore::vec3(0.0f, 1.0f, 0.0f);
-		const Kore::vec3 colorSouth = Kore::vec3(0.0f, 0.0f, 1.0f);
-		const Kore::vec3 colorWest = Kore::vec3(1.0f, 0.0f, 1.0f);
-		const Kore::vec3 colorInterior = Kore::vec3(1.0f, 1.0f, 1.0f);
-		// Let's have the outsides filled with walls
-		int NumWallCells = 0;
-		for (unsigned int x = 0; x < LevelWidth; x++)
-		{
-			for (unsigned int y = 0; y < LevelHeight; y++)
-			{
-				if (y == 0)
-				{
-					Level[x][y] = colorNorth;
-					NumWallCells++;
-				}
-				if (y == LevelHeight - 1)
-				{
-					Level[x][y] = colorSouth;
-					NumWallCells++;
-				}
-				if (x == 0)
-				{
-					Level[x][y] = colorWest;
-					NumWallCells++;
-				}
-				if (x == LevelWidth - 1)
-				{
-					Level[x][y] = colorEast;
-					NumWallCells++;
-				}
-			}
-		}
-	} */
 	
 	float RadToDegrees(float Angle)
 	{
@@ -143,11 +99,6 @@ namespace {
 		return Colors[GetIndex(Cell)];
 	}
 
-	Kore::Texture* GetTexture(const Kore::vec2i& Cell)
-	{
-		return Textures[GetIndex(Cell)];
-	}
-
 	Kore::vec2 GetPositionInCurrentCell(Kore::vec2 Position)
 	{
 		Kore::vec2i CurrentCell = GetCell(Position);
@@ -184,7 +135,7 @@ namespace {
 	// Increasing x to the right
 	// Increasing y to the bottom
 	// Note: This means that we have to account for the vertical direction of the unit circle being the other way around than the coordinate system
-	float CastRay(Kore::vec2 Position, float Angle, int& Result, Kore::vec2i& HitCell, int& TexCoordX, bool Debug = false)
+	float CastRay(Kore::vec2 Position, float Angle, int& Result, Kore::vec2i& HitCell, Kore::vec2& HitPoint, int& TexCoordX, bool Debug = false)
 	{
 		Result = -1;
 		if (Debug) Kore::log(Info, "Position %.2f%.2f, Angle %.2f", Position.x(), Position.y(), RadToDegrees(Angle));
@@ -360,6 +311,7 @@ namespace {
 			HitCell = HitHorizontalCell;
 			float yHitPosition = fmod(CurrentPosition.y() + Y, CellSize) / CellSize;
 			TexCoordX = (int)(yHitPosition * TextureSize);
+			HitPoint = Position + Kore::vec2(HorizontalDistance, Y);
 		} 
 		if (IsSolid(VerticalIndex))
 		{
@@ -375,6 +327,7 @@ namespace {
 				HitCell = HitVerticalCell;
 				float xHitPosition = fmod(CurrentPosition.x() + X, CellSize) / CellSize;
 				TexCoordX = (int)(xHitPosition * TextureSize);
+				HitPoint = Position + Kore::vec2(X, VerticalDistance);
 			}
 		} 
 		return Distance;
@@ -390,13 +343,18 @@ namespace {
 	}
 
 
-	void DrawVerticalLine(Kore::Texture* InTexture, int X, int texX, int LineHeight)
+	void DrawVerticalLine(Kore::Texture* InTexture, int Index, int X, int texX, int LineHeight)
 	{
+		int NumTexturesHorizontal = (int)(InTexture->texWidth / TextureSize);
+		int TexIndexX = Index % NumTexturesHorizontal;
+		int TexIndexY = Index / NumTexturesHorizontal;
+		int OffsetX = TexIndexX * (int) TextureSize;
+		int OffsetY = TexIndexY * (int) TextureSize;
 		for (int y = 0; y < LineHeight; y++)
 		{
 			float fY = (float)y / (float)LineHeight;
 			int texY = (int)(fY * TextureSize);
-			int col  = readPixel(InTexture, texX, texY);
+			int col  = readPixel(InTexture, OffsetX + texX, OffsetY + texY);
 			float a = ((col >> 24) & 0xff) / 255.0f;
 			float r = ((col >> 16) & 0xff) / 255.0f;
 			float g = ((col >> 8)  & 0xff) / 255.0f;
@@ -436,31 +394,63 @@ namespace {
 		float CurrentRayAngle = StartAngle;
 		int CurrentIndex;
 		Kore::vec2i HitCell;
+		Kore::vec2 HitPoint;
 		int TexCoordX = 0;
 		for (int X = 0; X < width; X++)
 		{
-			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentIndex, HitCell, TexCoordX);
+			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentIndex, HitCell, HitPoint, TexCoordX);
 			float LineHeight = DistanceFactor / Distance;
 			if (IsSolid(CurrentIndex))
 			{
-				Kore::Texture* CurrentTexture = Textures[CurrentIndex];
-				DrawVerticalLine(CurrentTexture, X, TexCoordX, (int)LineHeight);
+				// Cast another ray at the light source to check for shadows
+				Kore::vec2i HitCellLight;
+				Kore::vec2 HitPointLight;
+				int TexXLight;
+				int LightIndex;
+
+				// Calculate the angle to the light
+				Kore::vec2 ToLightNormal = (LightSource - HitPoint).normalize();
+				float LightAngle = -Kore::atan2(ToLightNormal.y(), ToLightNormal.x()) - Kore::atan2(0.0f, 1.0f);
+
+				float RayDistanceLight = CastRay(HitPoint + ToLightNormal * CellSize * 0.1f, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight);
+				bool IsShadowed = ((HitPointLight - HitPoint).squareLength() < (LightSource - HitPoint).squareLength());
+
+				int TextureIndex = IsShadowed ? CurrentIndex : CurrentIndex - 1;
+				DrawVerticalLine(Walls, TextureIndex, X, TexCoordX, (int)LineHeight);
 			}
 			CurrentRayAngle += DeltaAngle;
 		}
 
 		// For debugging, calculate the current forward Angle
 		// CurrentAngle = -0.2f;
-		float TestDistance = CastRay(CurrentPosition, CurrentAngle, CurrentIndex, HitCell, TexCoordX, true);
+		float TestDistance = CastRay(CurrentPosition, CurrentAngle, CurrentIndex, HitCell, HitPoint, TexCoordX, false);
 		Kore::vec2i Cell = GetCell(CurrentPosition);
 		bool IsInsideBlock = IsSolid(GetColor(Cell));
 		assert(!IsInsideBlock);
 		// Kore::log(Info, "DeltaT: %f", DeltaT);
 		Kore::log(Info, "Player is at %.1f|%.1f, angle %.3f, cell %i|%i, hit cell %i|%i distance is %.2f", CurrentPosition.x(), CurrentPosition.y(), RadToDegrees(CurrentAngle), Cell.x(), Cell.y(), HitCell.x(), HitCell.y(), TestDistance);
+		// Test the shadowing code
+		Kore::vec2i HitCellLight;
+		Kore::vec2 HitPointLight;
+		int TexXLight;
+		int LightIndex;
+
+		// Calculate the angle to the light
+		Kore::vec2 ToLightNormal = (LightSource - HitPoint).normalize();
+		float LightAngle = -Kore::atan2(ToLightNormal.y(), ToLightNormal.x()) - Kore::atan2(0.0f, 1.0f);
+
+		float RayDistanceLight = CastRay(HitPoint, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight);
+		bool IsShadowed = ((HitPointLight - HitPoint).squareLength() < (LightSource - HitPoint).squareLength());
+
+		Kore::log(Info, "Angle to light: %2.f", RadToDegrees(LightAngle));
+		Kore::log(Info, "Distance to hit point: %.2f, Distance from hit point to light: %.2f, Distance from hit point to ray impact: %.2f",
+			(HitPoint - CurrentPosition).getLength(),
+			(LightSource - HitPoint).getLength(),
+			(HitPointLight - HitPoint).getLength()
+		);
 		// Kore::log(Info, "Tex Coord X: %f", TexCoordX);
 		// And draw a red line in the center
 		DrawVerticalLine(Kore::vec3(1.0f, 0.0f, 0.0f), width / 2, height);
-		//DrawVerticalLine(wallTexture, width / 2, 32, height);
 	}
 
 
@@ -546,19 +536,16 @@ int kore(int argc, char** argv) {
 	
 	startTime = System::time();
 	
-	image = loadTexture("irobert-fb.png");
+	Walls = loadTexture("Walls.png");
 	Colors = new Kore::vec3[NumTextures + 1];
 	Colors[1] = Kore::vec3(1.0f, 0.0f, 0.0f);
-	Textures = new Kore::Texture*[NumTextures + 1];
-	Textures[0] = nullptr;
-	Textures[1] = loadTexture("finalredbrick1.png");
 	Kore::Mixer::init();
 	Kore::Audio::init();
 	Kore::Mixer::play(new SoundStream("back.ogg", true));
 
 	Kore::System::start();
 
-	destroyTexture(image);
+	destroyTexture(Walls);
 	
 	return 0;
 }
