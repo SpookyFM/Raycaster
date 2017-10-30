@@ -31,7 +31,7 @@ Kore::vec2 CurrentPosition = Kore::vec2(
 
 Kore::vec2 LightSource = Kore::vec2(
 	4 * CellSize,
-	2 * CellSize
+	3 * CellSize
 );
 
 float CurrentAngle;
@@ -135,7 +135,7 @@ namespace {
 	// Increasing x to the right
 	// Increasing y to the bottom
 	// Note: This means that we have to account for the vertical direction of the unit circle being the other way around than the coordinate system
-	float CastRay(Kore::vec2 Position, float Angle, int& Result, Kore::vec2i& HitCell, Kore::vec2& HitPoint, int& TexCoordX, bool Debug = false)
+	float CastRay(Kore::vec2 Position, float Angle, int& Result, Kore::vec2i& HitCell, Kore::vec2& HitPoint, int& TexCoordX, Kore::vec2& HitNormal, bool Debug = false)
 	{
 		Result = -1;
 		if (Debug) Kore::log(Info, "Position %.2f%.2f, Angle %.2f", Position.x(), Position.y(), RadToDegrees(Angle));
@@ -146,10 +146,12 @@ namespace {
 		float SinAngle = Kore::sin(Angle);
 		float CosAngle = Kore::cos(Angle);
 		float TanAngle = SinAngle / CosAngle;
-		const float epsilon = 0.01f;
+		const float epsilon = 0.0001f;
+		bool IsSpecialCase = false;
 		if (d < epsilon || Kore::abs(1.0f - d) < epsilon)
 		{
 			// Worry about edge cases later
+			IsSpecialCase = true;
 			return CellSize * (LevelHeight * LevelWidth);
 		}
 		// In which direction are we pointing?
@@ -306,12 +308,14 @@ namespace {
 			float Y = -TanAngle * HorizontalDistance;
 			AssertSign(HorizontalDistance, SignHorizontal);
 			AssertSign(Y, SignVertical);
-			Distance = Kore::cos(CurrentAngle) * HorizontalDistance - Kore::sin(CurrentAngle) * Y;
+			Distance = Kore::abs(Kore::cos(CurrentAngle) * HorizontalDistance - Kore::sin(CurrentAngle) * Y);
+			assert(Distance >= 0.0f);
 			Result = HorizontalIndex;
 			HitCell = HitHorizontalCell;
 			float yHitPosition = fmod(CurrentPosition.y() + Y, CellSize) / CellSize;
 			TexCoordX = (int)(yHitPosition * TextureSize);
 			HitPoint = Position + Kore::vec2(HorizontalDistance, Y);
+			HitNormal = Kore::vec2(SignHorizontal, 0.0f);
 		} 
 		if (IsSolid(VerticalIndex))
 		{
@@ -319,7 +323,7 @@ namespace {
 			float X = -VerticalDistance / TanAngle;
 			AssertSign(X, SignHorizontal);
 			AssertSign(VerticalDistance, SignVertical);
-			float TempDistance = Kore::cos(CurrentAngle) * X - Kore::sin(CurrentAngle) * VerticalDistance;
+			float TempDistance = Kore::abs(Kore::cos(CurrentAngle) * X - Kore::sin(CurrentAngle) * VerticalDistance);
 			if (TempDistance < Distance)
 			{
 				Distance = TempDistance;
@@ -328,6 +332,7 @@ namespace {
 				float xHitPosition = fmod(CurrentPosition.x() + X, CellSize) / CellSize;
 				TexCoordX = (int)(xHitPosition * TextureSize);
 				HitPoint = Position + Kore::vec2(X, VerticalDistance);
+				HitNormal = Kore::vec2(0.0f, SignVertical);
 			}
 		} 
 		return Distance;
@@ -395,25 +400,29 @@ namespace {
 		int CurrentIndex;
 		Kore::vec2i HitCell;
 		Kore::vec2 HitPoint;
+		Kore::vec2 HitNormal;
 		int TexCoordX = 0;
 		for (int X = 0; X < width; X++)
 		{
-			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentIndex, HitCell, HitPoint, TexCoordX);
+			float Distance = CastRay(CurrentPosition, CurrentRayAngle, CurrentIndex, HitCell, HitPoint, TexCoordX, HitNormal);
 			float LineHeight = DistanceFactor / Distance;
 			if (IsSolid(CurrentIndex))
 			{
 				// Cast another ray at the light source to check for shadows
 				Kore::vec2i HitCellLight;
 				Kore::vec2 HitPointLight;
+				Kore::vec2 HitNormalLight;
 				int TexXLight;
 				int LightIndex;
 
 				// Calculate the angle to the light
 				Kore::vec2 ToLightNormal = (LightSource - HitPoint).normalize();
-				float LightAngle = -Kore::atan2(ToLightNormal.y(), ToLightNormal.x()) - Kore::atan2(0.0f, 1.0f);
+				float LightAngle = -Kore::atan2(ToLightNormal.y(), ToLightNormal.x()) - Kore::atan2(0.0f, 1.0f) + Kore::pi * 2.0f;
 
-				float RayDistanceLight = CastRay(HitPoint + ToLightNormal * CellSize * 0.1f, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight);
+				// float RayDistanceLight = CastRay(HitPoint + ToLightNormal * CellSize * 0.1f, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight);
+				float RayDistanceLight = CastRay(HitPoint, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight, HitNormalLight);
 				bool IsShadowed = ((HitPointLight - HitPoint).squareLength() < (LightSource - HitPoint).squareLength());
+				IsShadowed |= HitNormal.dot(ToLightNormal) > 0.0f;
 
 				int TextureIndex = IsShadowed ? CurrentIndex : CurrentIndex - 1;
 				DrawVerticalLine(Walls, TextureIndex, X, TexCoordX, (int)LineHeight);
@@ -423,7 +432,7 @@ namespace {
 
 		// For debugging, calculate the current forward Angle
 		// CurrentAngle = -0.2f;
-		float TestDistance = CastRay(CurrentPosition, CurrentAngle, CurrentIndex, HitCell, HitPoint, TexCoordX, false);
+		float TestDistance = CastRay(CurrentPosition, CurrentAngle, CurrentIndex, HitCell, HitPoint, TexCoordX, HitNormal, false);
 		Kore::vec2i Cell = GetCell(CurrentPosition);
 		bool IsInsideBlock = IsSolid(GetColor(Cell));
 		assert(!IsInsideBlock);
@@ -432,21 +441,25 @@ namespace {
 		// Test the shadowing code
 		Kore::vec2i HitCellLight;
 		Kore::vec2 HitPointLight;
+		Kore::vec2 HitNormalLight;
 		int TexXLight;
 		int LightIndex;
 
 		// Calculate the angle to the light
 		Kore::vec2 ToLightNormal = (LightSource - HitPoint).normalize();
-		float LightAngle = -Kore::atan2(ToLightNormal.y(), ToLightNormal.x()) - Kore::atan2(0.0f, 1.0f);
+		float LightAngle = -Kore::atan2(ToLightNormal.y(), ToLightNormal.x()) - Kore::atan2(0.0f, 1.0f) + Kore::pi * 2.0f;
 
-		float RayDistanceLight = CastRay(HitPoint, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight);
+		float RayDistanceLight = CastRay(HitPoint, LightAngle, LightIndex, HitCellLight, HitPointLight, TexXLight, HitNormalLight);
 		bool IsShadowed = ((HitPointLight - HitPoint).squareLength() < (LightSource - HitPoint).squareLength());
 
 		Kore::log(Info, "Angle to light: %2.f", RadToDegrees(LightAngle));
-		Kore::log(Info, "Distance to hit point: %.2f, Distance from hit point to light: %.2f, Distance from hit point to ray impact: %.2f",
+		Kore::log(Info, "Distance to hit point: %.2f, Distance from hit point to light: %.2f, Distance from hit point to ray impact: %.2f, Angle to light: %.2f, Light hitpoint: %.2f|%.2f",
 			(HitPoint - CurrentPosition).getLength(),
 			(LightSource - HitPoint).getLength(),
-			(HitPointLight - HitPoint).getLength()
+			(HitPointLight - HitPoint).getLength(),
+			RadToDegrees(LightAngle),
+			HitPointLight.x(),
+			HitPointLight.y()
 		);
 		// Kore::log(Info, "Tex Coord X: %f", TexCoordX);
 		// And draw a red line in the center
