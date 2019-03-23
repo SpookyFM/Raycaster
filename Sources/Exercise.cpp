@@ -3,13 +3,14 @@
 #include <Kore/IO/FileReader.h>
 #include <Kore/Math/Core.h>
 #include <Kore/System.h>
-#include <Kore/Audio/Mixer.h>
+#include <Kore/Audio1/Audio.h>
+#include <Kore/Audio2/Audio.h>
 #include "SimpleGraphics.h"
 #include <Kore/Input/Keyboard.h>
 #include <Kore/Log.h>
 #include <cstring>
 #include <cmath>
-#include "Kore/Graphics/Texture.h"
+#include "Kore/Graphics4/Texture.h"
 #include <cassert>
 
 using namespace Kore;
@@ -47,7 +48,7 @@ const float WalkingSpeed = 100.0f;
 const float DistanceFactor = 25.0f * 512.0f;
 
 constexpr int NumTextures = 1;
-Kore::Texture* Walls;
+Kore::Graphics4::Texture* Walls;
 Kore::vec3* Colors;
 
 namespace {
@@ -91,7 +92,12 @@ namespace {
 
 	int GetIndex(const Kore::vec2i& Cell)
 	{
-		return Level[Cell.y() * LevelWidth + Cell.x()];
+		int index = Cell.y() * LevelWidth + Cell.x();
+		if (index < 0 || index >= LevelWidth * LevelHeight)
+		{
+			return 0;
+		}
+		return Level[index];
 	}
 
 	Kore::vec3 GetColor(const Kore::vec2i& Cell)
@@ -315,7 +321,7 @@ namespace {
 			float yHitPosition = fmod(CurrentPosition.y() + Y, CellSize) / CellSize;
 			TexCoordX = (int)(yHitPosition * TextureSize);
 			HitPoint = Position + Kore::vec2(HorizontalDistance, Y);
-			HitNormal = Kore::vec2(SignHorizontal, 0.0f);
+			HitNormal = Kore::vec2((float)SignHorizontal, 0.0f);
 		} 
 		if (IsSolid(VerticalIndex))
 		{
@@ -332,7 +338,7 @@ namespace {
 				float xHitPosition = fmod(CurrentPosition.x() + X, CellSize) / CellSize;
 				TexCoordX = (int)(xHitPosition * TextureSize);
 				HitPoint = Position + Kore::vec2(X, VerticalDistance);
-				HitNormal = Kore::vec2(0.0f, SignVertical);
+				HitNormal = Kore::vec2(0.0f, (float) SignVertical);
 			}
 		} 
 		return Distance;
@@ -348,7 +354,7 @@ namespace {
 	}
 
 
-	void DrawVerticalLine(Kore::Texture* InTexture, int Index, int X, int texX, int LineHeight)
+	void DrawVerticalLine(Kore::Graphics4::Texture* InTexture, int Index, int X, int texX, int LineHeight)
 	{
 		int NumTexturesHorizontal = (int)(InTexture->texWidth / TextureSize);
 		int TexIndexX = Index % NumTexturesHorizontal;
@@ -472,7 +478,7 @@ namespace {
 		float t = (float)(System::time() - startTime);
 		float deltaT = t - lastT;
 		lastT = t;
-		Kore::Audio::update();
+		Kore::Audio2::update();
 
 		startFrame();
 
@@ -492,37 +498,37 @@ namespace {
 
 void handleInput(KeyCode code, bool Value)
 {
-	if (code == Key_Left)
+	if (code == KeyLeft)
 	{
 		KeyLeftDown = Value;
 	}
-	else if (code == Key_Right)
+	else if (code == KeyRight)
 	{
 		KeyRightDown = Value;
 	}
-	else if (code == Key_Up)
+	else if (code == KeyUp)
 	{
 		KeyUpDown = Value;
 	}
-	else if (code == Key_Down)
+	else if (code == KeyDown)
 	{
 		KeyDownDown = Value;
 	}
 }
 
-void keyDown(KeyCode code, wchar_t character) {
+void keyDown(KeyCode code) {
 	handleInput(code, true);
 }
 
-void keyUp(KeyCode code, wchar_t character) {
+void keyUp(KeyCode code) {
 	handleInput(code, false);
 }
 
 
 int kore(int argc, char** argv) {
 
-	Kore::System::setName("TUD Game Technology - ");
-	Kore::System::setup();
+	Kore::System::init("Raycaster", width, height);
+	/* Kore::System::setup();
 	Kore::WindowOptions options;
 	options.title = "Exercise 2";
 	options.width = width;
@@ -535,7 +541,7 @@ int kore(int argc, char** argv) {
 	options.rendererOptions.stencilBufferBits = 8;
 	options.rendererOptions.textureFormat = 0;
 	options.rendererOptions.antialiasing = 0;
-	Kore::System::initWindow(options);
+	Kore::System::initWindow(options); */
 
 	initGraphics();
 
@@ -552,9 +558,9 @@ int kore(int argc, char** argv) {
 	Walls = loadTexture("Walls.png");
 	Colors = new Kore::vec3[NumTextures + 1];
 	Colors[1] = Kore::vec3(1.0f, 0.0f, 0.0f);
-	Kore::Mixer::init();
-	Kore::Audio::init();
-	Kore::Mixer::play(new SoundStream("back.ogg", true));
+	Kore::Audio1::init();
+	Kore::Audio2::init();
+	Kore::Audio1::play(new SoundStream("back.ogg", true));
 
 	Kore::System::start();
 

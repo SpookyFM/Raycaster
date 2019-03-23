@@ -1,27 +1,28 @@
 #include "pch.h"
 #include "SimpleGraphics.h"
 #include <Kore/IO/FileReader.h>
-#include <Kore/Graphics/Graphics.h>
-#include <Kore/Graphics/Shader.h>
+#include <Kore/Graphics4/Graphics.h>
+#include <Kore/Graphics4/Shader.h>
+#include <Kore/Graphics4/PipelineState.h>
 #include <Kore/IO/FileReader.h>
 #include <limits>
 
 using namespace Kore;
 
 namespace {
-	Shader* vertexShader;
-	Shader* fragmentShader;
-	Program* program;
-	TextureUnit tex;
-	VertexBuffer* vb;
-	IndexBuffer* ib;
-	Texture* texture;
+	Graphics4::Shader* vertexShader;
+	Graphics4::Shader* fragmentShader;
+	Graphics4::PipelineState* program;
+	Graphics4::TextureUnit tex;
+	Graphics4::VertexBuffer* vb;
+	Graphics4::IndexBuffer* ib;
+	Graphics4::Texture* texture;
 	int* image;
 }
 
 void startFrame() {
-	Graphics::begin();
-	Graphics::clear(Graphics::ClearColorFlag, 0xff000000);
+	Graphics4::begin();
+	Graphics4::clear(Graphics4::ClearColorFlag, 0xff000000);
 
 	image = (int*)texture->lock();
 }
@@ -49,15 +50,15 @@ void setPixel(int x, int y, float red, float green, float blue, float alpha /* =
 	
 	int col = image[y * texture->texWidth + x];
 
-#ifdef OPENGL
+// #ifdef OPENGL
 	float bi = ((col >> 16) & 0xff) / 255.0f;
 	float gi = ((col >> 8)  & 0xff) / 255.0f;
 	float ri = (col & 0xff) / 255.0f;
-#else
-	float ri = ((col >> 16) & 0xff) / 255.0f;
+//#else
+	/* float ri = ((col >> 16) & 0xff) / 255.0f;
 	float gi = ((col >> 8)  & 0xff) / 255.0f;
-	float bi = (col & 0xff) / 255.0f;
-#endif
+	float bi = (col & 0xff) / 255.0f; */
+// #endif
 
 	float ar = alpha * red + (1.0f - alpha) * ri;
 	float ag = alpha * green + (1.0f - alpha) * gi;
@@ -67,22 +68,22 @@ void setPixel(int x, int y, float red, float green, float blue, float alpha /* =
 	int g = (int)(ag * 255);
 	int b = (int)(ab * 255);
 
-#ifdef OPENGL
+//#ifdef OPENGL
 	image[y * texture->texWidth + x] = 0xff << 24 | b << 16 | g << 8 | r;
-#else
-	image[y * texture->texWidth + x] = 0xff << 24 | r << 16 | g << 8 | b;
-#endif
+//#else
+	//image[y * texture->texWidth + x] = 0xff << 24 | r << 16 | g << 8 | b;
+//#endif
 }
 
-Texture* loadTexture(const char* filename) {
-	return new Texture(filename, true);
+Kore::Graphics4::Texture* loadTexture(const char* filename) {
+	return new Graphics4::Texture(filename, true);
 }
 
-void destroyTexture(Kore::Texture* image) {
+void destroyTexture(Kore::Graphics4::Texture* image) {
 	delete image;
 }
 
-void drawTexture(Texture* inImage, int x, int y) {
+void drawTexture(Kore::Graphics4::Texture* inImage, int x, int y) {
 	int ystart = max(0, -y);
 	int xstart = max(0, -x);
 	int h = min(inImage->height, height - y);
@@ -100,7 +101,7 @@ void drawTexture(Texture* inImage, int x, int y) {
 	}
 }
 
-int readPixel(Kore::Texture* image, int x, int y) {
+int readPixel(Kore::Graphics4::Texture* image, int x, int y) {
 	int c = *(int*)&((u8*)image->data)[image->texWidth * 4 * y + x * 4];
 	int a = (c >> 24) & 0xff;
 
@@ -114,32 +115,34 @@ int readPixel(Kore::Texture* image, int x, int y) {
 void endFrame() {
 	texture->unlock();
 	
-	program->set();
-	Graphics::setTexture(tex, texture);
-	Graphics::setVertexBuffer(*vb);
-	Graphics::setIndexBuffer(*ib);
-	Graphics::drawIndexedVertices();
+	Kore::Graphics4::setPipeline(program);
+	Graphics4::setTexture(tex, texture);
+	Graphics4::setVertexBuffer(*vb);
+	Graphics4::setIndexBuffer(*ib);
+	Graphics4::drawIndexedVertices();
 
-	Graphics::end();
-	Graphics::swapBuffers();
+	Graphics4::end();
+	Graphics4::swapBuffers();
 }
 
 void initGraphics() {
 	FileReader vs("shader.vert");
 	FileReader fs("shader.frag");
-	vertexShader = new Shader(vs.readAll(), vs.size(), VertexShader);
-	fragmentShader = new Shader(fs.readAll(), fs.size(), FragmentShader);
-	VertexStructure structure;
-	structure.add("pos", Float3VertexData);
-	structure.add("tex", Float2VertexData);
-	program = new Program;
-	program->setVertexShader(vertexShader);
-	program->setFragmentShader(fragmentShader);
-	program->link(structure);
+	vertexShader = new Kore::Graphics4::Shader(vs.readAll(), vs.size(), Kore::Graphics4::VertexShader);
+	fragmentShader = new Kore::Graphics4::Shader(fs.readAll(), fs.size(), Kore::Graphics4::FragmentShader);
+	Kore::Graphics4::VertexStructure structure;
+	structure.add("pos", Kore::Graphics4::Float3VertexData);
+	structure.add("tex", Kore::Graphics4::Float2VertexData);
+	program = new Kore::Graphics4::PipelineState();
+	program->vertexShader = vertexShader;
+	program->fragmentShader = fragmentShader;
+	program->inputLayout[0] = &structure;
+	program->inputLayout[1] = nullptr;
+	program->compile();
 
 	tex = program->getTextureUnit("tex");
 
-	texture = new Texture(width, height, Image::RGBA32, false);
+	texture = new Kore::Graphics4::Texture(width, height, Kore::Graphics4::Image::RGBA32, false);
 	image = (int*)texture->lock();
 	for (int y = 0; y < texture->texHeight; ++y) {
 		for (int x = 0; x < texture->texWidth; ++x) {
@@ -153,7 +156,7 @@ void initGraphics() {
 	float yAspect = (float)texture->height / texture->texHeight;
 
 
-	vb = new VertexBuffer(4, structure, 0);
+	vb = new Kore::Graphics4::VertexBuffer(4, structure);
 	float* v = vb->lock();
 	{
 		int i = 0;
@@ -164,7 +167,7 @@ void initGraphics() {
 	}
 	vb->unlock();
 
-	ib = new IndexBuffer(6);
+	ib = new Kore::Graphics4::IndexBuffer(6);
 	int* ii = ib->lock();
 	{
 		int i = 0;
